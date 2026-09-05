@@ -1,0 +1,6 @@
+venv/
+archive/
+__pycache__/
+*.csv
+model/
+*.zip
