@@ -1,67 +1,67 @@
 import polars as pl
 import numpy as np
+from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler, LabelEncoder
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.metrics import precision_recall_fscore_support, confusion_matrix
-import gc
-import time
+from sklearn.metrics import classification_report, accuracy_score, f1_score, confusion_matrix
+import matplotlib.pyplot as plt
+import seaborn as sns
 
-# 1. Caricamento Dataset (Stessa pipeline della KAN)
-file_path = 'archive/CICIOT23/train/train.csv'
+# 1. LETTURA E CAMPIONAMENTO (Identico alla KAN)
 print("Lettura del dataset con Polars in corso...")
+df = pl.read_csv("archive/CICIOT23/train/train.csv") 
 
-df_pl = pl.read_csv(file_path)
-label_col = 'label' if 'label' in df_pl.columns else 'Label'
-labels_raw = df_pl[label_col].to_numpy()
+MIN_SAMPLES = 300
+MAX_SAMPLES = 10000
 
-feature_cols = [c for c in df_pl.columns if c != label_col]
-X_np = df_pl.select(feature_cols).to_numpy().astype("float32")
-del df_pl
-gc.collect()
+dfs_sampled = []
+for label, group in df.group_by('label'):
+    n_samples = group.height
+    if n_samples < MIN_SAMPLES:
+        dfs_sampled.append(group)
+    elif n_samples > MAX_SAMPLES:
+        dfs_sampled.append(group.sample(n=MAX_SAMPLES, seed=42))
+    else:
+        dfs_sampled.append(group)
 
-# 2. Encoding
-encoder = LabelEncoder()
-y_encoded = encoder.fit_transform(labels_raw)
+df_balanced = pl.concat(dfs_sampled)
+print(f"Dataset bilanciato per il training RF: {df_balanced.height} campioni totali.")
 
-# 3. Campionamento Stratificato INIZIALE (Esattamente 150k campioni come la KAN)
-max_total_samples = 150000
-fraction_to_keep = max_total_samples / len(X_np)
-X_np, _, y_encoded, _ = train_test_split(
-    X_np, y_encoded, train_size=fraction_to_keep, random_state=42, stratify=y_encoded
-)
+# Estrazione e codifica etichette
+X = df_balanced.drop("label").to_numpy()
+y_text = df_balanced["label"].to_numpy()
 
-# Split Train/Test (80/20)
-X_train, X_test, y_train, y_test = train_test_split(
-    X_np, y_encoded, test_size=0.2, random_state=42, stratify=y_encoded
-)
+le = LabelEncoder()
+y = le.fit_transform(y_text)
 
-# 4. Normalizzazione (Fit solo sul train per evitare Data Leakage)
+# 2. SPLIT E SCALING
+print("Esecuzione dello split e normalizzazione...")
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.20, stratify=y, random_state=42)
+
 scaler = StandardScaler()
 X_train = scaler.fit_transform(X_train)
 X_test = scaler.transform(X_test)
 
-# 5. Addestramento Random Forest Benchmark
-print("\nAvvio addestramento Random Forest (100 alberi) sui thread della CPU...")
-start_time = time.time()
-
-# class_weight='balanced' gestisce lo sbilanciamento internamente
-rf = RandomForestClassifier(n_estimators=100, class_weight='balanced', n_jobs=-1, random_state=42)
+# 3. TRAINING RANDOM FOREST
+print("Addestramento Random Forest in corso...")
+# n_jobs=-1 usa tutti i core della CPU
+rf = RandomForestClassifier(n_estimators=100, n_jobs=-1, class_weight='balanced', random_state=42)
 rf.fit(X_train, y_train)
 
-end_time = time.time()
-print(f"Addestramento completato in {end_time - start_time:.2f} secondi.")
+# 4. VALUTAZIONE FINALE
+y_pred = rf.predict(X_test)
 
-# 6. Valutazione
-preds = rf.predict(X_test)
+print("\n--- CLASSIFICATION REPORT DETTAGLIATO (RANDOM FOREST) ---")
+print(classification_report(y_test, y_pred, digits=4))
 
-accuracy = (preds == y_test).mean()
-precision, recall, f1_macro, _ = precision_recall_fscore_support(y_test, preds, average='macro', zero_division=0)
-_, _, f1_weighted, _ = precision_recall_fscore_support(y_test, preds, average='weighted', zero_division=0)
+print(f"F1-Score (Macro) Random Forest: {f1_score(y_test, y_pred, average='macro'):.4f}")
 
-print(f"\n--- CONFRONTO RANDOM FOREST (BASELINE) ---")
-print(f"Accuracy:          {accuracy:.4f}")
-print(f"Precision (Macro): {precision:.4f}")
-print(f"Recall (Macro):    {recall:.4f}")
-print(f"F1-Score (Macro):  {f1_macro:.4f}")
-print(f"F1-Score (Wgt):    {f1_weighted:.4f}")
+# Heatmap
+cm = confusion_matrix(y_test, y_pred)
+plt.figure(figsize=(20, 16))
+sns.heatmap(cm, annot=False, cmap='Greens')
+plt.xlabel('Predicted')
+plt.ylabel('True')
+plt.title('Confusion Matrix - Random Forest (Balanced Sampling)')
+plt.savefig('confusion_matrix_rf.png', dpi=300, bbox_inches='tight')
+print("Matrice salvata come 'confusion_matrix_rf.png'.")
