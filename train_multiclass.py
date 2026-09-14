@@ -12,6 +12,7 @@ from sklearn.metrics import classification_report, accuracy_score, f1_score, con
 from kan import KAN
 import matplotlib.pyplot as plt
 import seaborn as sns
+import time
 
 # Configurazione Device
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -165,3 +166,21 @@ plt.ylabel('True')
 plt.title('Confusion Matrix - KAN Multi-Class (Balanced Sampling)')
 plt.savefig('confusion_matrix_kan.png', dpi=300, bbox_inches='tight')
 print("Matrice salvata come 'confusion_matrix_kan.png'.")
+
+print("\n--- ANALISI EFFICIENZA (KAN) ---")
+# 1. Calcolo parametri
+total_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+print(f"Parametri addestrabili KAN: {total_params:,}")
+
+# 2. Calcolo tempo di inferenza (su batch completo)
+model.eval()
+start_time = time.time()
+with torch.no_grad():
+    _ = model(X_test_t)
+end_time = time.time()
+
+total_time = end_time - start_time
+time_per_sample = total_time / len(X_test_t)
+
+print(f"Tempo totale inferenza (su {len(X_test_t)} campioni): {total_time:.4f} secondi")
+print(f"Tempo di inferenza per singolo campione: {time_per_sample:.8f} secondi")

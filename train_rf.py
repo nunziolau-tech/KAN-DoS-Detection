@@ -6,6 +6,7 @@ from sklearn.preprocessing import StandardScaler, LabelEncoder
 from sklearn.metrics import classification_report, accuracy_score, f1_score, confusion_matrix
 import matplotlib.pyplot as plt
 import seaborn as sns
+import time
 
 # 1. LETTURA E CAMPIONAMENTO (Identico alla KAN)
 print("Lettura del dataset con Polars in corso...")
@@ -65,3 +66,19 @@ plt.ylabel('True')
 plt.title('Confusion Matrix - Random Forest (Balanced Sampling)')
 plt.savefig('confusion_matrix_rf.png', dpi=300, bbox_inches='tight')
 print("Matrice salvata come 'confusion_matrix_rf.png'.")
+
+print("\n--- ANALISI EFFICIENZA (RANDOM FOREST) ---")
+# 1. Calcolo "parametri" (Nodi totali)
+total_nodes = sum(tree.tree_.node_count for tree in rf.estimators_)
+print(f"Nodi decisionali totali (proxy parametri RF): {total_nodes:,}")
+
+# 2. Calcolo tempo di inferenza
+start_time = time.time()
+_ = rf.predict(X_test)
+end_time = time.time()
+
+total_time = end_time - start_time
+time_per_sample = total_time / len(X_test)
+
+print(f"Tempo totale inferenza (su {len(X_test)} campioni): {total_time:.4f} secondi")
+print(f"Tempo di inferenza per singolo campione: {time_per_sample:.8f} secondi")
