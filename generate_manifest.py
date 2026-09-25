@@ -21,10 +21,10 @@ for name, filename in files.items():
     print(f"\n[{name}] {filename}")
     print(f"- SHA-256: {get_sha256(path)}")
     print(f"- Righe: {df.height} | Colonne: {df.width}")
-    print(f"- Ordine Feature (prime 5): {df.columns[:5]} ...")
+    print(f"- Ordine Feature Completo: {df.columns}")
     
     class_dist = df.select("label").to_series().value_counts().to_dicts()
-    print(f"- Distribuzione Classi: {json.dumps(class_dist)[:100]}... (troncato)")
+    print(f"- Distribuzione Classi Completa: {json.dumps(class_dist, indent=2)}")
 
 print("\n=== AUDIT ZERO EXACT-FEATURE OVERLAP ===")
 feat_cols = [c for c in dfs["Train"].columns if c != 'label']
